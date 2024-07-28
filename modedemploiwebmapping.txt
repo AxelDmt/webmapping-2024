@@ -1,0 +1,32 @@
+sudo apt update
+sudo apt install nodejs npm
+sudo apt install postgresql postgis
+npm install cors
+npm install express
+
+sudo -u postgres psql
+CREATE DATABASE seismic_data;
+\c seismic_data
+CREATE EXTENSION postgis;
+CREATE TABLE earthquakes (
+    id SERIAL PRIMARY KEY,
+    latitude FLOAT,
+    longitude FLOAT,
+    depth FLOAT,
+    magnitude FLOAT,
+    time TIMESTAMP
+);
+
+-- Insérer des données de test
+INSERT INTO earthquakes (latitude, longitude, depth, magnitude, time) VALUES
+(34.05, -118.25, 10.0, 4.5, '2023-01-01 10:00:00'),
+(35.68, 139.69, 30.0, 5.2, '2023-02-01 12:00:00'),
+(37.77, -122.42, 5.0, 3.8, '2023-03-01 14:00:00'),
+(51.51, -0.13, 15.0, 4.0, '2023-04-01 16:00:00'),
+(-33.87, 151.21, 50.0, 6.1, '2023-05-01 18:00:00');
+
+SELECT * FROM earthquakes;
+
+node server.js
+
+

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carte des Tremblements de Terre</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 500px; }
+    #chartContainer { height: 500px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <form id="filterForm">
+    <label for="minTime">Temps Min:</label>
+    <input type="datetime-local" id="minTime" name="minTime">
+    <label for="maxTime">Temps Max:</label>
+    <input type="datetime-local" id="maxTime" name="maxTime">
+    <label for="minDepth">Profondeur Min:</label>
+    <input type="number" id="minDepth" name="minDepth" placeholder="Profondeur min">
+    <label for="maxDepth">Profondeur Max:</label>
+    <input type="number" id="maxDepth" name="maxDepth" placeholder="Profondeur max">
+    <label for="minMagnitude">Magnitude Min:</label>
+    <input type="number" step="0.1" id="minMagnitude" name="minMagnitude" placeholder="Magnitude min">
+    <label for="maxMagnitude">Magnitude Max:</label>
+    <input type="number" step="0.1" id="maxMagnitude" name="maxMagnitude" placeholder="Magnitude max">
+    <label for="varX">Expression pour X:</label>
+    <input type="text" id="varX" placeholder="Expression pour X" required>
+    <label for="varY">Expression pour Y:</label>
+    <input type="text" id="varY" placeholder="Expression pour Y" required>
+    <button type="button" id="loadData">Charger les données</button>
+    <button type="button" id="plotGraph">Afficher le graphique</button>
+  </form>
+  <div id="chartContainer">
+    <canvas id="chart"></canvas>
+  </div>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Initialisation de la carte
+    const map = L.map('map').setView([0, 0], 2);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+
+    document.getElementById('loadData').addEventListener('click', async () => {
+      const bbox = '-180,-90,180,90'; // BBox fixe
+      const params = new URLSearchParams(new FormData(document.getElementById('filterForm')));
+      params.append('bbox', bbox);
+      
+      // Construire l'URL complète pour la requête
+      const url = `http://localhost:3000/earthquakes?${params.toString()}`;
+      
+      // Afficher l'URL dans la console pour vérification
+      console.log('Requête AJAX:', url);
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Erreur lors de la récupération des données');
+        }
+        const data = await response.json();
+
+        // Afficher les points sur la carte
+        map.eachLayer(layer => {
+          if (layer instanceof L.Circle) {
+            map.removeLayer(layer);
+          }
+        });
+
+        data.forEach(quake => {
+          L.circle([quake.latitude, quake.longitude], {
+            color: getColor(quake.depth),
+            radius: 5000
+          }).addTo(map);
+        });
+
+        // Stocker les données pour le graphique
+        window.currentData = data;
+      } catch (error) {
+        console.error(error);
+        alert('Erreur lors de la récupération des données');
+      }
+    });
+
+    function getColor(depth) {
+      return depth < 10 ? 'blue' :
+             depth < 30 ? 'green' :
+             depth < 50 ? 'yellow' :
+             depth < 70 ? 'orange' :
+             'red';
+    }
+
+    document.getElementById('plotGraph').addEventListener('click', () => {
+      const varX = document.getElementById('varX').value;
+      const varY = document.getElementById('varY').value;
+      const data = window.currentData || [];
+
+      const points = data.map(quake => {
+        return {
+          x: eval(varX),
+          y: eval(varY)
+        };
+      });
+
+      const ctx = document.getElementById('chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Tremblements de terre',
+            data: points,
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          }]
+        },
+        options: {
+          scales: {
+            x: { title: { display: true, text: varX }},
+            y: { title: { display: true, text: varY }}
+          }
+        }
+      });
+
+      const xValues = data.map(quake => eval(varX));
+      const yValues = data.map(quake => eval(varY));
+
+      const corr = correlationCoefficient(xValues, yValues);
+      const cohen = cohenD(xValues, yValues);
+
+      console.log(`Coefficient de corrélation: ${corr}`);
+      console.log(`Facteur de Cohen: ${cohen}`);
+    });
+
+    function correlationCoefficient(x, y) {
+      const n = x.length;
+      const sumX = x.reduce((a, b) => a + b, 0);
+      const sumY = y.reduce((a, b) => a + b, 0);
+      const sumXY = x.map((xi, i) => xi * y[i]).reduce((a, b) => a + b, 0);
+      const sumX2 = x.map(xi => xi * xi).reduce((a, b) => a + b, 0);
+      const sumY2 = y.map(yi => yi * yi).reduce((a, b) => a + b, 0);
+
+      const numerator = n * sumXY - sumX * sumY;
+      const denominator = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
+
+      return numerator / denominator;
+    }
+
+    function cohenD(x, y) {
+      const meanX = x.reduce((a, b) => a + b, 0) / x.length;
+      const meanY = y.reduce((a, b) => a + b, 0) / y.length;
+      const pooledSD = Math.sqrt(((x.length - 1) * variance(x) + (y.length - 1) * variance(y)) / (x.length + y.length - 2));
+
+      return (meanX - meanY) / pooledSD;
+    }
+
+    function variance(arr) {
+      const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+      return arr.map(x => (x - mean) ** 2).reduce((a, b) => a + b, 0) / (arr.length - 1);
+    }
+  </script>
+</body>
+</html>
