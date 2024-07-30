@@ -32,7 +32,7 @@ sudo -u postgres psql
 Dans l'interface PostgreSQL, exécutez les commandes suivantes (configurer bien le mot de passe:
 
 ```sql
-ALTER USER your_username WITH PASSWORD 'new_password';
+ALTER USER postgres WITH PASSWORD 'postgres';
 CREATE DATABASE seismic_data;
 \c seismic_data
 CREATE EXTENSION postgis;
