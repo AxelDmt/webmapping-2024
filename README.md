@@ -149,7 +149,7 @@ On peut retrouver par exemple l’expression suivante :
 
 Voici un l’interface utilisateur après utilisation du filtre et du graphique : 
 
-![Capture d'écran 2024-07-30 185541.png](https://prod-files-secure.s3.us-west-2.amazonaws.com/07392f85-9c7f-4879-93a1-f005cc209efa/91bb3264-8d28-4da6-8d32-14b87e624625/Capture_dcran_2024-07-30_185541.png)
+![Capture_dcran_2024-07-30_185541.png](Capture_dcran_2024-07-30_185541.png)
 
 ## Dépendances
 
