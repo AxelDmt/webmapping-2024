@@ -29,9 +29,10 @@ Connectez-vous à PostgreSQL et configurez la base de données en exécutant les
 sudo -u postgres psql
 ```
 
-Dans l'interface PostgreSQL, exécutez les commandes suivantes :
+Dans l'interface PostgreSQL, exécutez les commandes suivantes (configurer bien le mot de passe:
 
 ```sql
+ALTER USER your_username WITH PASSWORD 'new_password';
 CREATE DATABASE seismic_data;
 \c seismic_data
 CREATE EXTENSION postgis;
