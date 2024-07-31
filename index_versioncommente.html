@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Carte des Tremblements de Terre</title>
+  <!-- Inclure la feuille de style de Leaflet pour la carte -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map { height: 500px; } /* Style pour la carte */
+    #chartContainer { height: 500px; } /* Style pour le conteneur du graphique */
+  </style>
+</head>
+<body>
+  <!-- Div pour afficher la carte -->
+  <div id="map"></div>
+  <!-- Formulaire pour filtrer les tremblements de terre -->
+  <form id="filterForm">
+    <label for="minTime">Temps Min:</label>
+    <input type="datetime-local" id="minTime" name="minTime">
+    <label for="maxTime">Temps Max:</label>
+    <input type="datetime-local" id="maxTime" name="maxTime">
+    <label for="minDepth">Profondeur Min:</label>
+    <input type="number" id="minDepth" name="minDepth" placeholder="Profondeur min">
+    <label for="maxDepth">Profondeur Max:</label>
+    <input type="number" id="maxDepth" name="maxDepth" placeholder="Profondeur max">
+    <label for="minMagnitude">Magnitude Min:</label>
+    <input type="number" step="0.1" id="minMagnitude" name="minMagnitude" placeholder="Magnitude min">
+    <label for="maxMagnitude">Magnitude Max:</label>
+    <input type="number" step="0.1" id="maxMagnitude" name="maxMagnitude" placeholder="Magnitude max">
+    <label for="varX">Expression pour X:</label>
+    <input type="text" id="varX" placeholder="Expression pour X" value="quake.depth" required>
+    <label for="varY">Expression pour Y:</label>
+    <input type="text" id="varY" placeholder="Expression pour Y" value="quake.magnitude" required>
+    <!-- Bouton pour charger les données -->
+    <button type="button" id="loadData">Charger les données</button>
+    <!-- Bouton pour afficher le graphique -->
+    <button type="button" id="plotGraph">Afficher le graphique</button>
+  </form>
+  <!-- Conteneur pour afficher le graphique -->
+  <div id="chartContainer">
+    <canvas id="chart"></canvas>
+  </div>
+  <!-- Scripts pour Leaflet et Chart.js -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // Initialisation de la carte avec une vue centrée sur les coordonnées [0, 0] et un zoom de 2
+    const map = L.map('map').setView([0, 0], 2);
+    // Ajout de la couche de tuiles OpenStreetMap à la carte
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Événement pour charger les données des tremblements de terre lorsque le bouton est cliqué
+    document.getElementById('loadData').addEventListener('click', async () => {
+      const bbox = '-180,-90,180,90'; // BBox fixe
+      const params = new URLSearchParams(new FormData(document.getElementById('filterForm')));
+      params.append('bbox', bbox);
+      
+      // Construire l'URL complète pour la requête
+      const url = `http://localhost:3000/earthquakes?${params.toString()}`;
+      
+      // Afficher l'URL dans la console pour vérification
+      console.log('Requête AJAX:', url);
+
+      try {
+        // Envoyer la requête AJAX pour récupérer les données
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error('Erreur lors de la récupération des données');
+        }
+        const data = await response.json();
+
+        // Supprimer les anciens cercles de la carte
+        map.eachLayer(layer => {
+          if (layer instanceof L.Circle) {
+            map.removeLayer(layer);
+          }
+        });
+
+        // Ajouter des cercles pour chaque tremblement de terre sur la carte
+        data.forEach(quake => {
+          L.circle([quake.latitude, quake.longitude], {
+            color: getColor(quake.depth), // Couleur basée sur la profondeur
+            radius: 5000
+          }).addTo(map);
+        });
+
+        // Stocker les données pour le graphique
+        window.currentData = data;
+      } catch (error) {
+        console.error(error);
+        alert('Erreur lors de la récupération des données');
+      }
+    });
+
+    // Fonction pour obtenir la couleur en fonction de la profondeur
+    function getColor(depth) {
+      return depth < 10 ? 'blue' :
+             depth < 20 ? 'green' :
+             depth < 30 ? 'yellow' :
+             depth < 40 ? 'orange' :
+             'red';
+    }
+
+    // Événement pour afficher le graphique lorsque le bouton est cliqué
+    document.getElementById('plotGraph').addEventListener('click', () => {
+      const varX = document.getElementById('varX').value;
+      const varY = document.getElementById('varY').value;
+      const data = window.currentData || [];
+
+      // Préparer les données pour le graphique
+      const points = data.map(quake => {
+        return {
+          x: eval(varX), // Évaluer l'expression pour X
+          y: eval(varY)  // Évaluer l'expression pour Y
+        };
+      });
+
+      const ctx = document.getElementById('chart').getContext('2d');
+      // Créer un nouveau graphique scatter avec Chart.js
+      new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: 'Tremblements de terre',
+            data: points,
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+          }]
+        },
+        options: {
+          scales: {
+            x: { title: { display: true, text: varX }},
+            y: { title: { display: true, text: varY }}
+          }
+        }
+      });
+
+      const xValues = data.map(quake => eval(varX)).filter(val => !isNaN(val));
+      const yValues = data.map(quake => eval(varY)).filter(val => !isNaN(val));
+
+      // Calculer et afficher les statistiques si les données sont suffisantes
+      if (xValues.length > 1 && yValues.length > 1) {
+        const corr = correlationCoefficient(xValues, yValues);
+        const cohen = cohenD(xValues, yValues);
+
+        console.log(`Coefficient de corrélation: ${corr}`);
+        console.log(`Facteur de Cohen: ${cohen}`);
+      } else {
+        console.log('Données insuffisantes pour le calcul des statistiques.');
+      }
+    });
+
+    // Fonction pour calculer le coefficient de corrélation
+    function correlationCoefficient(x, y) {
+      const n = x.length;
+      const sumX = x.reduce((a, b) => a + b, 0);
+      const sumY = y.reduce((a, b) => a + b, 0);
+      const sumXY = x.map((xi, i) => xi * y[i]).reduce((a, b) => a + b, 0);
+      const sumX2 = x.map(xi => xi * xi).reduce((a, b) => a + b, 0);
+      const sumY2 = y.map(yi => yi * yi).reduce((a, b) => a + b, 0);
+
+      const numerator = n * sumXY - sumX * sumY;
+      const denominator = Math.sqrt((n * sumX2 - sumX ** 2) * (n * sumY2 - sumY ** 2));
+
+      return denominator !== 0 ? numerator / denominator : NaN;
+    }
+
+    // Fonction pour calculer le facteur de Cohen
+    function cohenD(x, y) {
+      const meanX = x.reduce((a, b) => a + b, 0) / x.length;
+      const meanY = y.reduce((a, b) => a + b, 0) / y.length;
+      const pooledSD = Math.sqrt(((x.length - 1) * variance(x) + (y.length - 1) * variance(y)) / (x.length + y.length - 2));
+
+      return pooledSD !== 0 ? (meanX - meanY) / pooledSD : NaN;
+    }
+
+    // Fonction pour calculer la variance
+    function variance(arr) {
+      const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+      return arr.map(x => (x - mean) ** 2).reduce((a, b) => a + b, 0) / (arr.length - 1);
+    }
+  </script>
+</body>
+</html>
